@@ -2,12 +2,12 @@ import SwiftUI
 
 @main
 struct PhotoMenuBarApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
-        MenuBarExtra {
-            ContentView()
-        } label: {
-            Image(systemName: "photo.on.rectangle")
+        // Реальный UI строится через NSPopover в AppDelegate
+        Settings {
+            EmptyView()
         }
-        .menuBarExtraStyle(.window)
     }
 }

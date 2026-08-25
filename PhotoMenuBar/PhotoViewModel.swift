@@ -1,4 +1,5 @@
 import Foundation
+import _PhotosUI_SwiftUI
 import AppKit
 import Combine
 
@@ -25,17 +26,19 @@ final class PhotoViewModel: ObservableObject {
         currentIndex += 1
     }
 
-    func addTestPhoto() {
-        // Создаём простую цветную заглушку-картинку для проверки UI
-        let size = NSSize(width: 200, height: 200)
-        let image = NSImage(size: size)
-        image.lockFocus()
-        NSColor.systemBlue.withAlphaComponent(Double.random(in: 0.3...1.0)).setFill()
-        NSRect(origin: .zero, size: size).fill()
-        image.unlockFocus()
+    func addPhotos(from items: [PhotosPickerItem]) async {
+        for item in items {
+            guard
+                let data = try? await item.loadTransferable(type: Data.self),
+                let nsImage = NSImage(data: data)
+            else { continue }
 
-        photos.append(Photo(image: image))
-        currentIndex = photos.count - 1
+            photos.append(Photo(image: nsImage))
+        }
+
+        if !photos.isEmpty {
+            currentIndex = photos.count - 1
+        }
     }
 
     func deleteCurrentPhoto() {

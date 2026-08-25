@@ -1,7 +1,9 @@
 import SwiftUI
+import PhotosUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = PhotoViewModel()
+    @EnvironmentObject var viewModel: PhotoViewModel
+    @State private var selectedItems: [PhotosPickerItem] = []
 
     var body: some View {
         VStack(spacing: 12) {
@@ -54,10 +56,20 @@ struct ContentView: View {
 
             Divider()
 
-            // Временная кнопка для проверки UI
             HStack(spacing: 12) {
-                Button("Добавить тестовое фото") {
-                    viewModel.addTestPhoto()
+                PhotosPicker(
+                    selection: $selectedItems,
+                    maxSelectionCount: 10,
+                    matching: .images
+                ) {
+                    Label("Добавить фото", systemImage: "plus.circle")
+                }
+                .onChange(of: selectedItems) { _, newItems in
+                    guard !newItems.isEmpty else { return }
+                    Task {
+                        await viewModel.addPhotos(from: newItems)
+                        selectedItems = []
+                    }
                 }
 
                 Button(role: .destructive) {
