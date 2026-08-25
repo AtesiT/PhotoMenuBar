@@ -15,8 +15,9 @@ struct ContentView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color.gray.opacity(0.1))
 
-                if let photo = viewModel.currentPhoto {
-                    Image(nsImage: photo.image)
+                if let photo = viewModel.currentPhoto,
+                   let nsImage = viewModel.image(for: photo) {
+                    Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .padding(8)

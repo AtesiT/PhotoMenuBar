@@ -1,16 +1,11 @@
 import Foundation
-import AppKit
 
-struct Photo: Identifiable, Equatable {
+struct Photo: Identifiable, Codable, Equatable {
     let id: UUID
-    let image: NSImage
+    let fileName: String
 
-    init(id: UUID = UUID(), image: NSImage) {
+    init(id: UUID = UUID(), fileName: String) {
         self.id = id
-        self.image = image
-    }
-
-    static func == (lhs: Photo, rhs: Photo) -> Bool {
-        lhs.id == rhs.id
+        self.fileName = fileName
     }
 }
