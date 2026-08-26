@@ -8,8 +8,10 @@ import Combine
 final class PhotoViewModel: ObservableObject {
     @Published private(set) var photos: [Photo] = []
     @Published var currentIndex: Int = 0
+    @Published var isLoading: Bool = false
 
     private let fileManager = FileManager.default
+    private let imageCache = NSCache<NSString, NSImage>()
 
     private var appSupportDirectory: URL {
         let base = fileManager.urls(for: .applicationSupportDirectory,
@@ -47,20 +49,42 @@ final class PhotoViewModel: ObservableObject {
 
     func goBack() {
         guard canGoBack else { return }
-        currentIndex -= 1
+        withAnimation {
+            currentIndex -= 1
+        }
     }
 
     func goForward() {
         guard canGoForward else { return }
-        currentIndex += 1
+        withAnimation {
+            currentIndex += 1
+        }
+    }
+
+    private func withAnimation(_ body: () -> Void) {
+        body()
     }
 
     func image(for photo: Photo) -> NSImage? {
+        let key = photo.fileName as NSString
+
+        if let cached = imageCache.object(forKey: key) {
+            return cached
+        }
+
         let url = imagesDirectory.appendingPathComponent(photo.fileName)
-        return NSImage(contentsOf: url)
+        guard let image = NSImage(contentsOf: url) else {
+            return nil
+        }
+
+        imageCache.setObject(image, forKey: key)
+        return image
     }
 
     func addPhotos(from items: [PhotosPickerItem]) async {
+        isLoading = true
+        defer { isLoading = false }
+
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
 
@@ -87,8 +111,10 @@ final class PhotoViewModel: ObservableObject {
 
     func deleteCurrentPhoto() {
         guard let photo = currentPhoto else { return }
+
         let url = imagesDirectory.appendingPathComponent(photo.fileName)
         try? fileManager.removeItem(at: url)
+        imageCache.removeObject(forKey: photo.fileName as NSString)
 
         photos.removeAll { $0.id == photo.id }
 
@@ -111,8 +137,21 @@ final class PhotoViewModel: ObservableObject {
         guard fileManager.fileExists(atPath: metadataURL.path) else { return }
         do {
             let data = try Data(contentsOf: metadataURL)
-            photos = try JSONDecoder().decode([Photo].self, from: data)
+            let loaded = try JSONDecoder().decode([Photo].self, from: data)
+
+            // Защита от битых данных: оставляем только фото,
+            // для которых реально существует файл на диске
+            photos = loaded.filter { photo in
+                let url = imagesDirectory.appendingPathComponent(photo.fileName)
+                return fileManager.fileExists(atPath: url.path)
+            }
+
             currentIndex = 0
+
+            // Если что-то отфильтровали - пересохраняем чистые метаданные
+            if photos.count != loaded.count {
+                saveMetadata()
+            }
         } catch {
             print("Ошибка загрузки метаданных: \(error)")
         }
