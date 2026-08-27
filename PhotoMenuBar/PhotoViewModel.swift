@@ -80,6 +80,39 @@ final class PhotoViewModel: ObservableObject {
         imageCache.setObject(image, forKey: key)
         return image
     }
+    
+    func addPhotos(from urls: [URL]) async {
+        isLoading = true
+        defer { isLoading = false }
+
+        for url in urls {
+            //  Если для Sandbox
+            let accessGranted = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessGranted {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            guard let data = try? Data(contentsOf: url) else { continue }
+
+            let fileExtension = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
+            let fileName = UUID().uuidString + "." + fileExtension
+            let destinationURL = imagesDirectory.appendingPathComponent(fileName)
+
+            do {
+                try data.write(to: destinationURL)
+                photos.append(Photo(fileName: fileName))
+            } catch {
+                print("Ошибка копирования файла из Finder: \(error)")
+            }
+        }
+
+        if !photos.isEmpty {
+            currentIndex = photos.count - 1
+        }
+        saveMetadata()
+    }
 
     func addPhotos(from items: [PhotosPickerItem]) async {
         isLoading = true

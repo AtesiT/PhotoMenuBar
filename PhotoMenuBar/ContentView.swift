@@ -1,9 +1,11 @@
 import SwiftUI
 import PhotosUI
+import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: PhotoViewModel
     @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var showPhotosPicker = false
     @State private var showDeleteConfirmation = false
 
     var body: some View {
@@ -59,7 +61,6 @@ struct ContentView: View {
                 }
             }
             .padding(.horizontal, 30)
-            // Навигация стрелками клавиатуры
             .background(
                 Button("") { viewModel.goBack() }
                     .keyboardShortcut(.leftArrow, modifiers: [])
@@ -74,14 +75,28 @@ struct ContentView: View {
             Divider()
 
             HStack(spacing: 12) {
-                PhotosPicker(
-                    selection: $selectedItems,
-                    maxSelectionCount: 10,
-                    matching: .images
-                ) {
+                Menu {
+                    Button {
+                        showPhotosPicker = true
+                    } label: {
+                        Label("Из галереи Фото", systemImage: "photo.stack")
+                    }
+
+                    Button {
+                        presentFinderPanel()
+                    } label: {
+                        Label("Из Finder", systemImage: "folder")
+                    }
+                } label: {
                     Label("Добавить фото", systemImage: "plus.circle")
                 }
                 .disabled(viewModel.isLoading)
+                .photosPicker(
+                    isPresented: $showPhotosPicker,
+                    selection: $selectedItems,
+                    maxSelectionCount: 10,
+                    matching: .images
+                )
                 .onChange(of: selectedItems) { _, newItems in
                     guard !newItems.isEmpty else { return }
                     Task {
@@ -122,6 +137,23 @@ struct ContentView: View {
     private var counterText: String {
         guard !viewModel.photos.isEmpty else { return "0 из 0" }
         return "\(viewModel.currentIndex + 1) из \(viewModel.photos.count)"
+    }
+
+    private func presentFinderPanel() {
+        let panel = NSOpenPanel()
+        panel.title = "Выберите фото"
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.image]
+
+        panel.begin { response in
+            guard response == .OK else { return }
+            let urls = panel.urls
+            Task {
+                await viewModel.addPhotos(from: urls)
+            }
+        }
     }
 
     @ViewBuilder
