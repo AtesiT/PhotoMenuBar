@@ -1,11 +1,9 @@
 import SwiftUI
-import PhotosUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: PhotoViewModel
-    @State private var selectedItems: [PhotosPickerItem] = []
-    @State private var showPhotosPicker = false
     @State private var showDeleteConfirmation = false
 
     var body: some View {
@@ -75,35 +73,12 @@ struct ContentView: View {
             Divider()
 
             HStack(spacing: 12) {
-                Menu {
-                    Button {
-                        showPhotosPicker = true
-                    } label: {
-                        Label("Из галереи Фото", systemImage: "photo.stack")
-                    }
-
-                    Button {
-                        presentFinderPanel()
-                    } label: {
-                        Label("Из Finder", systemImage: "folder")
-                    }
+                Button {
+                    presentFinderPanel()
                 } label: {
                     Label("Добавить фото", systemImage: "plus.circle")
                 }
                 .disabled(viewModel.isLoading)
-                .photosPicker(
-                    isPresented: $showPhotosPicker,
-                    selection: $selectedItems,
-                    maxSelectionCount: 10,
-                    matching: .images
-                )
-                .onChange(of: selectedItems) { _, newItems in
-                    guard !newItems.isEmpty else { return }
-                    Task {
-                        await viewModel.addPhotos(from: newItems)
-                        selectedItems = []
-                    }
-                }
 
                 Button(role: .destructive) {
                     showDeleteConfirmation = true

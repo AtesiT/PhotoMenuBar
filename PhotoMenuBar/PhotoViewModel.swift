@@ -1,7 +1,5 @@
 import Foundation
-import _PhotosUI_SwiftUI
 import AppKit
-import PhotosUI
 import Combine
 
 @MainActor
@@ -49,20 +47,12 @@ final class PhotoViewModel: ObservableObject {
 
     func goBack() {
         guard canGoBack else { return }
-        withAnimation {
-            currentIndex -= 1
-        }
+        currentIndex -= 1
     }
 
     func goForward() {
         guard canGoForward else { return }
-        withAnimation {
-            currentIndex += 1
-        }
-    }
-
-    private func withAnimation(_ body: () -> Void) {
-        body()
+        currentIndex += 1
     }
 
     func image(for photo: Photo) -> NSImage? {
@@ -80,13 +70,12 @@ final class PhotoViewModel: ObservableObject {
         imageCache.setObject(image, forKey: key)
         return image
     }
-    
+
     func addPhotos(from urls: [URL]) async {
         isLoading = true
         defer { isLoading = false }
 
         for url in urls {
-            //  Если для Sandbox
             let accessGranted = url.startAccessingSecurityScopedResource()
             defer {
                 if accessGranted {
@@ -106,34 +95,6 @@ final class PhotoViewModel: ObservableObject {
             } catch {
                 print("Ошибка копирования файла из Finder: \(error)")
             }
-        }
-
-        if !photos.isEmpty {
-            currentIndex = photos.count - 1
-        }
-        saveMetadata()
-    }
-
-    func addPhotos(from items: [PhotosPickerItem]) async {
-        isLoading = true
-        defer { isLoading = false }
-
-        for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-
-            let fileName = UUID().uuidString + ".jpg"
-            let url = imagesDirectory.appendingPathComponent(fileName)
-
-            if let nsImage = NSImage(data: data),
-               let tiff = nsImage.tiffRepresentation,
-               let bitmap = NSBitmapImageRep(data: tiff),
-               let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.9]) {
-                try? jpegData.write(to: url)
-            } else {
-                try? data.write(to: url)
-            }
-
-            photos.append(Photo(fileName: fileName))
         }
 
         if !photos.isEmpty {
@@ -172,8 +133,6 @@ final class PhotoViewModel: ObservableObject {
             let data = try Data(contentsOf: metadataURL)
             let loaded = try JSONDecoder().decode([Photo].self, from: data)
 
-            // Защита от битых данных: оставляем только фото,
-            // для которых реально существует файл на диске
             photos = loaded.filter { photo in
                 let url = imagesDirectory.appendingPathComponent(photo.fileName)
                 return fileManager.fileExists(atPath: url.path)
@@ -181,7 +140,6 @@ final class PhotoViewModel: ObservableObject {
 
             currentIndex = 0
 
-            // Если что-то отфильтровали - пересохраняем чистые метаданные
             if photos.count != loaded.count {
                 saveMetadata()
             }
