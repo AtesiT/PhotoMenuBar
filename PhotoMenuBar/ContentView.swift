@@ -72,11 +72,12 @@ struct ContentView: View {
 
             Divider()
 
-            HStack(spacing: 12) {
+            // Все три кнопки
+            HStack(spacing: 10) {
                 Button {
                     presentFinderPanel()
                 } label: {
-                    Label("Добавить фото", systemImage: "plus.circle")
+                    Label("Добавить", systemImage: "plus.circle")
                 }
                 .disabled(viewModel.isLoading)
 
@@ -96,15 +97,12 @@ struct ContentView: View {
                     }
                     Button("Отмена", role: .cancel) {}
                 }
+                Button("Выход") {
+                    NSApplication.shared.terminate(nil)
+                }
             }
+            .padding(.horizontal)
             .padding(.bottom, 12)
-
-            Divider()
-
-            Button("Выход") {
-                NSApplication.shared.terminate(nil)
-            }
-            .padding(.bottom, 8)
         }
         .frame(width: 360, height: 420)
     }
