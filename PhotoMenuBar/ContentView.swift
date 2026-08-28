@@ -1,147 +1,119 @@
 import SwiftUI
-import AppKit
-import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: PhotoViewModel
-    @State private var showDeleteConfirmation = false
+    @State private var isHoveringLeft = false
+    @State private var isHoveringRight = false
 
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Мои фото")
-                .font(.headline)
-                .padding(.top, 8)
+        ZStack {
+            Color(NSColor.windowBackgroundColor)
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.1))
+            imageContent
 
-                if viewModel.isLoading {
-                    ProgressView("Добавляем фото…")
-                } else if let photo = viewModel.currentPhoto,
-                          let nsImage = viewModel.image(for: photo) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(8)
-                        .id(photo.id)
-                        .transition(.opacity)
-                } else {
-                    VStack(spacing: 8) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 40))
-                            .foregroundColor(.secondary)
-                        Text("Нет добавленных фото")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .frame(height: 240)
-            .padding(.horizontal)
-            .animation(.easeInOut(duration: 0.15), value: viewModel.currentIndex)
+            navigationOverlay
 
-            HStack {
-                navButton(systemName: "chevron.left", enabled: viewModel.canGoBack) {
-                    viewModel.goBack()
-                }
-
+            VStack {
                 Spacer()
-
-                Text(counterText)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
-
-                Spacer()
-
-                navButton(systemName: "chevron.right", enabled: viewModel.canGoForward) {
-                    viewModel.goForward()
+                if !viewModel.photos.isEmpty {
+                    Text(counterText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.bottom, 10)
                 }
             }
-            .padding(.horizontal, 30)
-            .background(
-                Button("") { viewModel.goBack() }
-                    .keyboardShortcut(.leftArrow, modifiers: [])
-                    .opacity(0)
-            )
-            .background(
-                Button("") { viewModel.goForward() }
-                    .keyboardShortcut(.rightArrow, modifiers: [])
-                    .opacity(0)
-            )
-
-            Divider()
-
-            // Все три кнопки
-            HStack(spacing: 10) {
-                Button {
-                    presentFinderPanel()
-                } label: {
-                    Label("Добавить", systemImage: "plus.circle")
-                }
-                .disabled(viewModel.isLoading)
-
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
-                } label: {
-                    Label("Удалить", systemImage: "trash")
-                }
-                .disabled(viewModel.currentPhoto == nil)
-                .confirmationDialog(
-                    "Удалить это фото?",
-                    isPresented: $showDeleteConfirmation,
-                    titleVisibility: .visible
-                ) {
-                    Button("Удалить", role: .destructive) {
-                        viewModel.deleteCurrentPhoto()
-                    }
-                    Button("Отмена", role: .cancel) {}
-                }
-                Button("Выход") {
-                    NSApplication.shared.terminate(nil)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 12)
         }
-        .frame(width: 360, height: 420)
+        .frame(width: 360, height: 320)
+        // Для поддержки стрелок клавиатуры
+        .background(
+            Button("") { viewModel.goBack() }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+                .opacity(0)
+        )
+        .background(
+            Button("") { viewModel.goForward() }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+                .opacity(0)
+        )
     }
 
-    private var counterText: String {
-        guard !viewModel.photos.isEmpty else { return "0 из 0" }
-        return "\(viewModel.currentIndex + 1) из \(viewModel.photos.count)"
+    @ViewBuilder
+    private var imageContent: some View {
+        if viewModel.isLoading {
+            ProgressView()
+        } else if let photo = viewModel.currentPhoto,
+                  let nsImage = viewModel.image(for: photo) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .padding(20)
+                .id(photo.id)
+                .transition(.opacity)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 40))
+                    .foregroundColor(.secondary)
+                Text("Нет добавленных фото")
+                    .foregroundColor(.secondary)
+                Text("ПКМ по иконке в меню → «Добавить фото»")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+        }
     }
 
-    private func presentFinderPanel() {
-        let panel = NSOpenPanel()
-        panel.title = "Выберите фото"
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.image]
+    private var navigationOverlay: some View {
+        HStack(spacing: 0) {
+            navZone(isHovering: $isHoveringLeft, enabled: viewModel.canGoBack, icon: "chevron.left") {
+                viewModel.goBack()
+            }
 
-        panel.begin { response in
-            guard response == .OK else { return }
-            let urls = panel.urls
-            Task {
-                await viewModel.addPhotos(from: urls)
+            // Центральная зона не реагирует на клик, чтобы не мешать просмотру
+            Color.clear
+                .frame(width: 100)
+                .allowsHitTesting(false)
+
+            navZone(isHovering: $isHoveringRight, enabled: viewModel.canGoForward, icon: "chevron.right") {
+                viewModel.goForward()
             }
         }
     }
 
     @ViewBuilder
-    private func navButton(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(enabled ? Color.accentColor.opacity(0.15) : Color.gray.opacity(0.08))
-                )
-                .foregroundColor(enabled ? .accentColor : .secondary)
+    private func navZone(
+        isHovering: Binding<Bool>,
+        enabled: Bool,
+        icon: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        ZStack {
+            Color.clear
+
+            if enabled {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(10)
+                    .background(Circle().fill(Color.black.opacity(0.4)))
+                    .opacity(isHovering.wrappedValue ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.15), value: isHovering.wrappedValue)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if enabled { action() }
+        }
+        .onHover { hovering in
+            isHovering.wrappedValue = hovering && enabled
+        }
+    }
+
+    private var counterText: String {
+        "\(viewModel.currentIndex + 1) из \(viewModel.photos.count)"
     }
 }
