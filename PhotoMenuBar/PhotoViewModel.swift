@@ -42,17 +42,18 @@ final class PhotoViewModel: ObservableObject {
         return photos[currentIndex]
     }
 
-    var canGoBack: Bool { currentIndex > 0 }
-    var canGoForward: Bool { currentIndex < photos.count - 1 }
+    // Кнопки/зоны навигации активны, если фото больше одного
+    var canGoBack: Bool { photos.count > 1 }
+    var canGoForward: Bool { photos.count > 1 }
 
     func goBack() {
-        guard canGoBack else { return }
-        currentIndex -= 1
+        guard photos.count > 1 else { return }
+        currentIndex = (currentIndex - 1 + photos.count) % photos.count
     }
 
     func goForward() {
-        guard canGoForward else { return }
-        currentIndex += 1
+        guard photos.count > 1 else { return }
+        currentIndex = (currentIndex + 1) % photos.count
     }
 
     func image(for photo: Photo) -> NSImage? {
