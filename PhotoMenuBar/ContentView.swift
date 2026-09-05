@@ -5,9 +5,13 @@ struct ContentView: View {
     @State private var isHoveringLeft = false
     @State private var isHoveringRight = false
 
+    private let edgeZoneWidth: CGFloat = 60
+
     var body: some View {
         ZStack {
             Color(NSColor.windowBackgroundColor)
+
+            WindowDragArea()
 
             imageContent
 
@@ -23,11 +27,11 @@ struct ContentView: View {
                         .padding(.horizontal, 10)
                         .background(.ultraThinMaterial, in: Capsule())
                         .padding(.bottom, 10)
+                        .allowsHitTesting(false)
                 }
             }
         }
         .frame(width: 360, height: 320)
-        // Для поддержки стрелок клавиатуры
         .background(
             Button("") { viewModel.goBack() }
                 .keyboardShortcut(.leftArrow, modifiers: [])
@@ -44,6 +48,7 @@ struct ContentView: View {
     private var imageContent: some View {
         if viewModel.isLoading {
             ProgressView()
+                .allowsHitTesting(false)
         } else if let photo = viewModel.currentPhoto,
                   let nsImage = viewModel.image(for: photo) {
             Image(nsImage: nsImage)
@@ -52,6 +57,7 @@ struct ContentView: View {
                 .padding(20)
                 .id(photo.id)
                 .transition(.opacity)
+                .allowsHitTesting(false)
         } else {
             VStack(spacing: 8) {
                 Image(systemName: "photo.on.rectangle.angled")
@@ -63,6 +69,7 @@ struct ContentView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary.opacity(0.7))
             }
+            .allowsHitTesting(false)
         }
     }
 
@@ -71,15 +78,16 @@ struct ContentView: View {
             navZone(isHovering: $isHoveringLeft, enabled: viewModel.canGoBack, icon: "chevron.left") {
                 viewModel.goBack()
             }
+            .frame(width: edgeZoneWidth)
 
-            // Центральная зона не реагирует на клик, чтобы не мешать просмотру
             Color.clear
-                .frame(width: 100)
+                .frame(maxWidth: .infinity)
                 .allowsHitTesting(false)
 
             navZone(isHovering: $isHoveringRight, enabled: viewModel.canGoForward, icon: "chevron.right") {
                 viewModel.goForward()
             }
+            .frame(width: edgeZoneWidth)
         }
     }
 
@@ -103,7 +111,7 @@ struct ContentView: View {
                     .animation(.easeInOut(duration: 0.15), value: isHovering.wrappedValue)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture {
             if enabled { action() }
