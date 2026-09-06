@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let viewModel = PhotoViewModel()
+    private var sizeManager: PopoverSizeManager!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -22,10 +23,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 360, height: 320)
+
+        let initialSize = WindowSizeStore.load() ?? CGSize(width: 360, height: 320)
+        popover.contentSize = initialSize
         popover.behavior = .applicationDefined
+
+        sizeManager = PopoverSizeManager(popover: popover, initialSize: initialSize)
+
         popover.contentViewController = NSHostingController(
-            rootView: ContentView().environmentObject(viewModel)
+            rootView: ContentView()
+                .environmentObject(viewModel)
+                .environmentObject(sizeManager)
         )
     }
 

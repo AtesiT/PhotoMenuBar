@@ -2,8 +2,12 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: PhotoViewModel
+    @EnvironmentObject var sizeManager: PopoverSizeManager
+
     @State private var isHoveringLeft = false
     @State private var isHoveringRight = false
+    @State private var isHoveringResize = false
+    @State private var lastDragTranslation: CGSize = .zero
 
     private let edgeZoneWidth: CGFloat = 60
 
@@ -30,8 +34,10 @@ struct ContentView: View {
                         .allowsHitTesting(false)
                 }
             }
+
+            resizeHandle
         }
-        .frame(width: 360, height: 320)
+        .frame(width: sizeManager.currentSize.width, height: sizeManager.currentSize.height)
         .background(
             Button("") { viewModel.goBack() }
                 .keyboardShortcut(.leftArrow, modifiers: [])
@@ -118,6 +124,42 @@ struct ContentView: View {
         }
         .onHover { hovering in
             isHovering.wrappedValue = hovering && enabled
+        }
+    }
+
+    private var resizeHandle: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .opacity(isHoveringResize ? 0.9 : 0.4)
+                    .padding(8)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        isHoveringResize = hovering
+                        if hovering {
+                            NSCursor.crosshair.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let deltaWidth = value.translation.width - lastDragTranslation.width
+                                let deltaHeight = value.translation.height - lastDragTranslation.height
+                                sizeManager.updateSize(deltaWidth: deltaWidth, deltaHeight: deltaHeight)
+                                lastDragTranslation = value.translation
+                            }
+                            .onEnded { _ in
+                                lastDragTranslation = .zero
+                                sizeManager.commitSize()
+                            }
+                    )
+            }
         }
     }
 
