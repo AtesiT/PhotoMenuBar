@@ -18,6 +18,11 @@ final class DraggableNSView: NSView {
         )
         window.setFrameOrigin(newOrigin)
     }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let window = self.window else { return }
+        WindowPositionStore.save(window.frame.origin)
+    }
 }
 
 struct WindowDragArea: NSViewRepresentable {

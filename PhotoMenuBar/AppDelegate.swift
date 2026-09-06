@@ -18,7 +18,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             button.action = #selector(statusItemClicked(_:))
             button.target = self
-            // Ловим и левый, и правый клик на одной кнопке
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
@@ -48,11 +47,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
+
+            if let savedOrigin = WindowPositionStore.load() {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, let window = self.popover.contentViewController?.view.window else { return }
+                    let safeOrigin = WindowPositionStore.clamped(savedOrigin, windowSize: window.frame.size)
+                    window.setFrameOrigin(safeOrigin)
+                }
+            }
         }
     }
 
     private func showContextMenu() {
-        // Если открыто окно превью, то закрываем перед показом меню
         if popover.isShown {
             popover.performClose(nil)
         }
@@ -86,7 +92,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        // Чтобы обычный левый клик по-прежнему открывал popover, а не это меню.
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
