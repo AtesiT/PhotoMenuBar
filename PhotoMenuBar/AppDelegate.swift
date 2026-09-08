@@ -4,9 +4,9 @@ import UniformTypeIdentifiers
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
-    private var popover: NSPopover!
+    private var floatingPanel: FloatingPanel!
     private let viewModel = PhotoViewModel()
-    private var sizeManager: PopoverSizeManager!
+    private var sizeManager: WindowSizeManager!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -22,19 +22,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
-        popover = NSPopover()
-
         let initialSize = WindowSizeStore.load() ?? CGSize(width: 360, height: 320)
-        popover.contentSize = initialSize
-        popover.behavior = .applicationDefined
+        let initialOrigin = WindowPositionStore.load() ?? NSPoint(x: 100, y: 100)
 
-        sizeManager = PopoverSizeManager(popover: popover, initialSize: initialSize)
+        sizeManager = WindowSizeManager(initialSize: initialSize)
 
-        popover.contentViewController = NSHostingController(
+        let hostingController = NSHostingController(
             rootView: ContentView()
                 .environmentObject(viewModel)
                 .environmentObject(sizeManager)
         )
+
+        let contentRect = NSRect(origin: initialOrigin, size: initialSize)
+        floatingPanel = FloatingPanel(contentRect: contentRect, viewController: hostingController)
+        sizeManager.attach(window: floatingPanel)
     }
 
     @objc private func statusItemClicked(_ sender: AnyObject?) {
@@ -43,32 +44,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if event.type == .rightMouseUp {
             showContextMenu()
         } else {
-            togglePopover()
+            togglePanel()
         }
     }
 
-    private func togglePopover() {
-        guard let button = statusItem.button else { return }
-
-        if popover.isShown {
-            popover.performClose(nil)
+    private func togglePanel() {
+        if floatingPanel.isVisible {
+            floatingPanel.orderOut(nil)
         } else {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
-
-            if let savedOrigin = WindowPositionStore.load() {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, let window = self.popover.contentViewController?.view.window else { return }
-                    let safeOrigin = WindowPositionStore.clamped(savedOrigin, windowSize: window.frame.size)
-                    window.setFrameOrigin(safeOrigin)
-                }
-            }
+            positionPanelNearStatusItemIfNeeded()
+            floatingPanel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
         }
+    }
+
+    private func positionPanelNearStatusItemIfNeeded() {
+        guard
+            WindowPositionStore.load() == nil,
+            let button = statusItem.button,
+            let buttonWindow = button.window
+        else { return }
+
+        let buttonFrameInScreen = buttonWindow.convertToScreen(button.frame)
+        let panelSize = floatingPanel.frame.size
+        let origin = NSPoint(
+            x: buttonFrameInScreen.midX - panelSize.width / 2,
+            y: buttonFrameInScreen.minY - panelSize.height - 4
+        )
+        floatingPanel.setFrameOrigin(origin)
     }
 
     private func showContextMenu() {
-        if popover.isShown {
-            popover.performClose(nil)
+        if floatingPanel.isVisible {
+            floatingPanel.orderOut(nil)
         }
 
         let menu = NSMenu()
@@ -106,16 +114,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func addPhotoAction() {
-        let panel = NSOpenPanel()
-        panel.title = "Выберите фото"
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.image]
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Выберите фото"
+        openPanel.allowsMultipleSelection = true
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        openPanel.allowedContentTypes = [.image]
 
-        panel.begin { [weak self] response in
+        openPanel.begin { [weak self] response in
             guard response == .OK, let self else { return }
-            let urls = panel.urls
+            let urls = openPanel.urls
             Task { @MainActor in
                 await self.viewModel.addPhotos(from: urls)
             }

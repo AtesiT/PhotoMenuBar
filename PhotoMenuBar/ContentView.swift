@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: PhotoViewModel
-    @EnvironmentObject var sizeManager: PopoverSizeManager
+    @EnvironmentObject var sizeManager: WindowSizeManager
 
     @State private var isHoveringLeft = false
     @State private var isHoveringRight = false
@@ -38,6 +38,11 @@ struct ContentView: View {
             resizeHandle
         }
         .frame(width: sizeManager.currentSize.width, height: sizeManager.currentSize.height)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.black.opacity(0.15), lineWidth: 1)
+        )
         .background(
             Button("") { viewModel.goBack() }
                 .keyboardShortcut(.leftArrow, modifiers: [])
@@ -147,7 +152,7 @@ struct ContentView: View {
                         }
                     }
                     .gesture(
-                        DragGesture(minimumDistance: 0)
+                        DragGesture(minimumDistance: 0, coordinateSpace: .global)
                             .onChanged { value in
                                 let deltaWidth = value.translation.width - lastDragTranslation.width
                                 let deltaHeight = value.translation.height - lastDragTranslation.height
