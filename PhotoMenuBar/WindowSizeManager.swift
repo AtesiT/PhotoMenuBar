@@ -2,27 +2,27 @@ import AppKit
 import Combine
 
 @MainActor
-final class PopoverSizeManager: ObservableObject {
+final class WindowSizeManager: ObservableObject {
     @Published private(set) var currentSize: CGSize
 
-    private weak var popover: NSPopover?
+    private weak var window: NSWindow?
 
     private let minSize = CGSize(width: 260, height: 240)
     private let maxSize = CGSize(width: 900, height: 900)
 
-    init(popover: NSPopover, initialSize: CGSize) {
-        self.popover = popover
+    init(initialSize: CGSize) {
         self.currentSize = initialSize
     }
 
+    func attach(window: NSWindow) {
+        self.window = window
+    }
+
     func updateSize(deltaWidth: CGFloat, deltaHeight: CGFloat) {
-        guard
-            let popover,
-            let window = popover.contentViewController?.view.window
-        else { return }
+        guard let window else { return }
 
         let oldFrame = window.frame
-        let topLeft = NSPoint(x: oldFrame.origin.x, y: oldFrame.origin.y + oldFrame.size.height)
+        let topLeftY = oldFrame.origin.y + oldFrame.size.height
 
         var newSize = currentSize
         newSize.width = clamp(newSize.width + deltaWidth, min: minSize.width, max: maxSize.width)
@@ -31,16 +31,14 @@ final class PopoverSizeManager: ObservableObject {
         guard newSize != currentSize else { return }
         currentSize = newSize
 
-        popover.animates = false
-        popover.contentSize = newSize
-
-        let newOrigin = NSPoint(x: topLeft.x, y: topLeft.y - newSize.height)
+        let newOrigin = NSPoint(x: oldFrame.origin.x, y: topLeftY - newSize.height)
         window.setFrame(NSRect(origin: newOrigin, size: newSize), display: true)
     }
 
     func commitSize() {
+        guard let window else { return }
         WindowSizeStore.save(currentSize)
-        popover?.animates = true
+        WindowPositionStore.save(window.frame.origin)
     }
 
     private func clamp(_ value: CGFloat, min minValue: CGFloat, max maxValue: CGFloat) -> CGFloat {
