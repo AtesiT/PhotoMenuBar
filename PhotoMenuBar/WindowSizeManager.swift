@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Combine
 
 @MainActor
@@ -45,3 +46,110 @@ final class WindowSizeManager: ObservableObject {
         Swift.min(Swift.max(value, minValue), maxValue)
     }
 }
+
+final class DraggableNSView: NSView {
+    private var initialLocationInWindow: NSPoint = .zero
+
+    override func mouseDown(with event: NSEvent) {
+        initialLocationInWindow = event.locationInWindow
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window = self.window else { return }
+
+        let screenLocation = NSEvent.mouseLocation
+        let newOrigin = NSPoint(
+            x: screenLocation.x - initialLocationInWindow.x,
+            y: screenLocation.y - initialLocationInWindow.y
+        )
+        window.setFrameOrigin(newOrigin)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let window = self.window else { return }
+        WindowPositionStore.save(window.frame.origin)
+    }
+}
+
+struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> DraggableNSView {
+        DraggableNSView()
+    }
+
+    func updateNSView(_ nsView: DraggableNSView, context: Context) {}
+}
+
+final class FloatingPanel: NSPanel {
+    init(contentRect: NSRect, viewController: NSViewController) {
+        super.init(
+            contentRect: contentRect,
+            styleMask: [.borderless, .nonactivatingPanel, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        self.contentViewController = viewController
+        self.isMovableByWindowBackground = false
+        self.level = .floating
+        self.hasShadow = true
+        self.isOpaque = false
+        self.backgroundColor = .clear
+        self.hidesOnDeactivate = false
+        self.isReleasedWhenClosed = false
+        self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    }
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
+enum WindowSizeStore {
+    private static let key = "PopoverWindowSize"
+
+    static func save(_ size: CGSize) {
+        let dict: [String: CGFloat] = ["width": size.width, "height": size.height]
+        UserDefaults.standard.set(dict, forKey: key)
+    }
+
+    static func load() -> CGSize? {
+        guard
+            let dict = UserDefaults.standard.dictionary(forKey: key) as? [String: CGFloat],
+            let width = dict["width"],
+            let height = dict["height"]
+        else {
+            return nil
+        }
+        return CGSize(width: width, height: height)
+    }
+}
+
+enum WindowPositionStore {
+    private static let key = "PopoverWindowOrigin"
+
+    static func save(_ origin: NSPoint) {
+        let dict: [String: CGFloat] = ["x": origin.x, "y": origin.y]
+        UserDefaults.standard.set(dict, forKey: key)
+    }
+
+    static func load() -> NSPoint? {
+        guard
+            let dict = UserDefaults.standard.dictionary(forKey: key) as? [String: CGFloat],
+            let x = dict["x"],
+            let y = dict["y"]
+        else {
+            return nil
+        }
+        return NSPoint(x: x, y: y)
+    }
+
+    static func clamped(_ origin: NSPoint, windowSize: NSSize) -> NSPoint {
+        let screen = NSScreen.screens.first(where: { $0.frame.contains(origin) }) ?? NSScreen.main
+
+        guard let visibleFrame = screen?.visibleFrame else { return origin }
+
+        var result = origin
+        result.x = min(max(result.x, visibleFrame.minX), visibleFrame.maxX - windowSize.width)
+        result.y = min(max(result.y, visibleFrame.minY), visibleFrame.maxY - windowSize.height)
+        return result
+    }
+}
+

@@ -2,6 +2,16 @@ import Foundation
 import AppKit
 import Combine
 
+struct Photo: Identifiable, Codable, Equatable {
+    let id: UUID
+    let fileName: String
+
+    init(id: UUID = UUID(), fileName: String) {
+        self.id = id
+        self.fileName = fileName
+    }
+}
+
 @MainActor
 final class PhotoViewModel: ObservableObject {
     @Published private(set) var photos: [Photo] = []
@@ -149,3 +159,5 @@ final class PhotoViewModel: ObservableObject {
         }
     }
 }
+
+
