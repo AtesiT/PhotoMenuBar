@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import ImageIO
 import Combine
 
 struct Photo: Identifiable, Codable, Equatable {
@@ -20,6 +21,8 @@ final class PhotoViewModel: ObservableObject {
 
     private let fileManager = FileManager.default
     private let imageCache = NSCache<NSString, NSImage>()
+
+    private let maxDisplaySize: CGFloat = 900
 
     private var appSupportDirectory: URL {
         let base = fileManager.urls(for: .applicationSupportDirectory,
@@ -44,6 +47,9 @@ final class PhotoViewModel: ObservableObject {
     }
 
     init() {
+        imageCache.countLimit = 30
+        imageCache.totalCostLimit = 150 * 1024 * 1024
+
         loadMetadata()
     }
 
@@ -52,7 +58,6 @@ final class PhotoViewModel: ObservableObject {
         return photos[currentIndex]
     }
 
-    // Кнопки/зоны навигации активны, если фото больше одного
     var canGoBack: Bool { photos.count > 1 }
     var canGoForward: Bool { photos.count > 1 }
 
@@ -74,12 +79,49 @@ final class PhotoViewModel: ObservableObject {
         }
 
         let url = imagesDirectory.appendingPathComponent(photo.fileName)
-        guard let image = NSImage(contentsOf: url) else {
+        guard let image = downsampledImage(at: url, maxPixelSize: maxPixelSize) else {
             return nil
         }
 
-        imageCache.setObject(image, forKey: key)
+        let cost = cacheCost(for: image)
+        imageCache.setObject(image, forKey: key, cost: cost)
         return image
+    }
+
+    private var maxPixelSize: CGFloat {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        return maxDisplaySize * scale
+    }
+
+    private func downsampledImage(at url: URL, maxPixelSize: CGFloat) -> NSImage? {
+        let sourceOptions: [CFString: Any] = [
+            kCGImageSourceShouldCache: false
+        ]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else {
+            return nil
+        }
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(
+            source, 0, thumbnailOptions as CFDictionary
+        ) else {
+            return nil
+        }
+
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    private func cacheCost(for image: NSImage) -> Int {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return 0
+        }
+        return cgImage.bytesPerRow * cgImage.height
     }
 
     func addPhotos(from urls: [URL]) async {
@@ -159,5 +201,3 @@ final class PhotoViewModel: ObservableObject {
         }
     }
 }
-
-
