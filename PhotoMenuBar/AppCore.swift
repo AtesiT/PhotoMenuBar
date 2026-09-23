@@ -17,7 +17,11 @@ struct Photo: Identifiable, Codable, Equatable {
 @MainActor
 final class PhotoViewModel: ObservableObject {
     @Published private(set) var photos: [Photo] = []
-    @Published var currentIndex: Int = 0
+    @Published var currentIndex: Int = 0 {
+        didSet {
+            prefetchNeighbors()
+        }
+    }
     @Published var isLoading: Bool = false
 
     private let fileManager = FileManager.default
@@ -78,7 +82,7 @@ final class PhotoViewModel: ObservableObject {
         }
 
         let url = imagesDirectory.appendingPathComponent(photo.fileName)
-        guard let image = downsampledImage(at: url, maxPixelSize: maxPixelSize) else {
+        guard let image = Self.downsampledImage(at: url, maxPixelSize: maxPixelSize) else {
             return nil
         }
 
@@ -86,12 +90,41 @@ final class PhotoViewModel: ObservableObject {
         return image
     }
 
+    func prefetchNeighbors() {
+        guard photos.count > 1 else { return }
+
+        let nextIndex = (currentIndex + 1) % photos.count
+        let previousIndex = (currentIndex - 1 + photos.count) % photos.count
+        let pixelSize = maxPixelSize
+        let dir = imagesDirectory
+
+        for index in [nextIndex, previousIndex] {
+            let photo = photos[index]
+            let key = photo.fileName as NSString
+
+            if imageCache.object(forKey: key) != nil { continue }
+
+            let url = dir.appendingPathComponent(photo.fileName)
+
+            Task.detached(priority: .utility) { [weak self] in
+                guard let image = Self.downsampledImage(at: url, maxPixelSize: pixelSize) else { return }
+
+                await MainActor.run {
+                    guard let self else { return }
+                    if self.imageCache.object(forKey: key) == nil {
+                        self.imageCache.setObject(image, forKey: key, cost: self.cacheCost(for: image))
+                    }
+                }
+            }
+        }
+    }
+
     private var maxPixelSize: CGFloat {
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         return maxDisplaySize * scale
     }
 
-    private func downsampledImage(at url: URL, maxPixelSize: CGFloat) -> NSImage? {
+    nonisolated private static func downsampledImage(at url: URL, maxPixelSize: CGFloat) -> NSImage? {
         let sourceOptions: [CFString: Any] = [
             kCGImageSourceShouldCache: false
         ]
@@ -167,6 +200,7 @@ final class PhotoViewModel: ObservableObject {
             currentIndex = max(0, photos.count - 1)
         }
         saveMetadata()
+        prefetchNeighbors()
     }
 
     private func saveMetadata() {
