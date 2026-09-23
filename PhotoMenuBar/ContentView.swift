@@ -65,7 +65,7 @@ struct ContentView: View {
             Image(nsImage: nsImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .padding(20)
+                .padding(10)
                 .id(photo.id)
                 .transition(.opacity)
                 .allowsHitTesting(false)
