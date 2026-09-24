@@ -53,6 +53,20 @@ struct ContentView: View {
                 .keyboardShortcut(.rightArrow, modifiers: [])
                 .opacity(0)
         )
+        .alert(
+            "Ошибка",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { viewModel.errorMessage = nil }
+                }
+            ),
+            presenting: viewModel.errorMessage
+        ) { _ in
+            Button("ОК") { viewModel.errorMessage = nil }
+        } message: { message in
+            Text(message)
+        }
     }
 
     @ViewBuilder

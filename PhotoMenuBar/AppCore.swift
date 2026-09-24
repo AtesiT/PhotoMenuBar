@@ -23,6 +23,7 @@ final class PhotoViewModel: ObservableObject {
         }
     }
     @Published var isLoading: Bool = false
+    @Published var errorMessage: String?
 
     private let fileManager = FileManager.default
     private let imageCache = NSCache<NSString, NSImage>()
@@ -159,6 +160,8 @@ final class PhotoViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        var failedFileNames: [String] = []
+
         for url in urls {
             let accessGranted = url.startAccessingSecurityScopedResource()
             defer {
@@ -167,7 +170,10 @@ final class PhotoViewModel: ObservableObject {
                 }
             }
 
-            guard let data = try? Data(contentsOf: url) else { continue }
+            guard let data = try? Data(contentsOf: url) else {
+                failedFileNames.append(url.lastPathComponent)
+                continue
+            }
 
             let fileExtension = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
             let fileName = UUID().uuidString + "." + fileExtension
@@ -177,7 +183,7 @@ final class PhotoViewModel: ObservableObject {
                 try data.write(to: destinationURL)
                 photos.append(Photo(fileName: fileName))
             } catch {
-                print("Ошибка копирования файла из Finder: \(error)")
+                failedFileNames.append(url.lastPathComponent)
             }
         }
 
@@ -185,13 +191,24 @@ final class PhotoViewModel: ObservableObject {
             currentIndex = photos.count - 1
         }
         saveMetadata()
+
+        if !failedFileNames.isEmpty {
+            let names = failedFileNames.joined(separator: ", ")
+            errorMessage = "Не удалось добавить: \(names)"
+        }
     }
 
     func deleteCurrentPhoto() {
         guard let photo = currentPhoto else { return }
 
         let url = imagesDirectory.appendingPathComponent(photo.fileName)
-        try? fileManager.removeItem(at: url)
+
+        do {
+            try fileManager.removeItem(at: url)
+        } catch {
+            errorMessage = "Не удалось удалить файл: \(error.localizedDescription)"
+        }
+
         imageCache.removeObject(forKey: photo.fileName as NSString)
 
         photos.removeAll { $0.id == photo.id }
@@ -208,7 +225,7 @@ final class PhotoViewModel: ObservableObject {
             let data = try JSONEncoder().encode(photos)
             try data.write(to: metadataURL)
         } catch {
-            print("Ошибка сохранения метаданных: \(error)")
+            errorMessage = "Не удалось сохранить данные: \(error.localizedDescription)"
         }
     }
 
@@ -229,7 +246,7 @@ final class PhotoViewModel: ObservableObject {
                 saveMetadata()
             }
         } catch {
-            print("Ошибка загрузки метаданных: \(error)")
+            errorMessage = "Не удалось загрузить данные: \(error.localizedDescription)"
         }
     }
 }
@@ -406,7 +423,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let initialSize = WindowSizeStore.load() ?? CGSize(width: 360, height: 320)
-        let initialOrigin = WindowPositionStore.load() ?? NSPoint(x: 100, y: 100)
+        let rawInitialOrigin = WindowPositionStore.load() ?? NSPoint(x: 100, y: 100)
+        let initialOrigin = WindowPositionStore.clamped(rawInitialOrigin, windowSize: initialSize)
 
         sizeManager = WindowSizeManager(initialSize: initialSize)
 
@@ -436,8 +454,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             floatingPanel.orderOut(nil)
         } else {
             positionPanelNearStatusItemIfNeeded()
+            ensurePanelOnScreen()
             floatingPanel.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func ensurePanelOnScreen() {
+        let clamped = WindowPositionStore.clamped(
+            floatingPanel.frame.origin,
+            windowSize: floatingPanel.frame.size
+        )
+        if clamped != floatingPanel.frame.origin {
+            floatingPanel.setFrameOrigin(clamped)
         }
     }
 
